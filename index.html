@@ -567,8 +567,8 @@ const STAGES2 = [
  { inst:'주사기로 <b class="hl">가라앉은 시금치 조각</b>을 제작할 것.',
    learn:'주사기에 잎 조각 6개와 수용액을 넣고 <b class="hl">손잡이를 뒤로 당겨</b> 잎 속 공기를 빼면, 잎 조각이 가라앉아요. 광합성으로 산소가 차면 다시 떠오르죠.',
    ok:()=>G2.airRemoved },
- { inst:'비커에 <b class="hl">빛의 세기에 따른 광합성량</b>을 확인하기 위한 실험을 세팅할 것.',
-   learn:'비커에 수용액과 가라앉은 잎 조각을 넣고, 전등으로 빛을 비춰요. 전등을 비커로부터 <b class="hl">같은 거리</b>에 두는 것이 중요해요.',
+ { inst:'비커에 <b class="hl">빛의 세기에 따른 광합성량</b>을 확인하기 위한 실험을 세팅할 것. 전등은 비커로부터 <b class="hl">정확히 같은 거리</b>(노란 점선 원에 맞춤)에 둬야 해요!',
+   learn:'비커에 수용액과 가라앉은 잎 조각을 넣고, 전등으로 빛을 비춰요. 빛의 세기만 다르게 하려면 전등을 비커로부터 <b class="hl">정확히 같은 거리</b>에 둬야 공정한 실험이 돼요(통제변인). 첫 전등을 놓으면 나타나는 점선 원에 나머지 전등을 맞추세요.',
    ok:()=>G2.beakerSol && G2.beakerDisks>=6 && G2.lampsPlaced>=G2.round && lampsEqualDist() },
  { inst:'실험을 진행해 잎 조각이 모두 떠오르는 <b class="hl">시간</b>을 측정할 것. 🤔',
    learn:'🔬 빛이 강할수록 광합성이 빨라지지만, 어느 세기(<b class="hl">광포화점</b>) 이상에선 더 빨라지지 않아요. 측정한 시간들을 이어 붙이면 핸드폰 암호가 됩니다! 📱',
@@ -958,6 +958,29 @@ for(let i=0;i<3;i++){
 const lampDropHit=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.4),
   new THREE.MeshBasicMaterial({visible:false}));
 lampDropHit.rotation.x=-Math.PI/2; lampDropHit.position.set(R2.x,1.02,0); lampDropHit.userData.r2='lampdrop'; scene.add(lampDropHit);
+// 등거리 가이드: 첫 전등을 놓으면 그 반지름의 점선 원이 비커 중심에 떠서 같은 거리를 눈으로 맞추게 함
+const lampGuideRing=(function(){
+  const seg=64, pts=[];
+  for(let i=0;i<=seg;i++){ const a=(i/seg)*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(a),0,Math.sin(a))); }
+  const geo=new THREE.BufferGeometry().setFromPoints(pts);
+  const mat=new THREE.LineDashedMaterial({color:0xffe14a, dashSize:0.08, gapSize:0.06, transparent:true, opacity:0.9});
+  const ring=new THREE.Line(geo,mat); ring.computeLineDistances();
+  ring.position.set(R2.x,1.035,0); ring.visible=false; scene.add(ring);
+  return ring;
+})();
+function updateLampGuide(){
+  const placed=r2lamps.filter(l=>l.userData.placed);
+  if(G2.active && G2.stage===3 && G2.beakerSol && G2.beakerDisks>=6 && placed.length>=1){
+    // 첫 전등의 거리에 맞춰 원 반지름 설정
+    const r=placed[0].userData.dist || 0.6;
+    lampGuideRing.scale.set(r,1,r);
+    // 모두 같은 거리면 초록, 아니면 노랑
+    lampGuideRing.material.color.setHex(lampsEqualDist()?0x40ff60:0xffe14a);
+    lampGuideRing.visible=true;
+  } else {
+    lampGuideRing.visible=false;
+  }
+}
 
 // --- 의문의 핸드폰 (책상 위, 4자리 잠금) ---
 const phone=new THREE.Group();
@@ -1501,6 +1524,7 @@ function recallLamp(lg){
   lg.position.set(R2.x-2.8+lg.userData.idx*0.45,1.02,2.7);
   G2.lampsPlaced=r2lamps.filter(l=>l.userData.placed).length;
   setLampCount(0);
+  updateLampGuide();
   toast('↩️ 전등을 회수했어요. 다시 배치해 보세요 ('+G2.lampsPlaced+'/'+G2.round+')');
   checkStage2();
 }
@@ -1980,19 +2004,40 @@ function r2PlaceLamp(pt){
   lg.userData.dist = Math.hypot(x-R2.x, z-0);
   G2.lampsPlaced=r2lamps.filter(l=>l.userData.placed).length;
   if(G2.lampsPlaced>=need){
-    if(lampsEqualDist()) toast('💡 전등 '+need+'개를 같은 거리에 배치 완료! "실험 진행"으로 불을 켜세요');
-    else toast('⚠️ 전등들의 거리가 달라요! 전등을 클릭해 회수하고 같은 거리에 다시 두세요');
-  } else toast('💡 전등 배치 ('+G2.lampsPlaced+'/'+need+') — 비커로부터 거리를 일정하게! (잘못 두면 클릭해 회수)');
+    if(lampsEqualDist()){
+      toast('💡 전등 '+need+'개를 같은 거리에 배치 완료! "실험 진행"으로 불을 켜세요');
+    } else {
+      const gapCm=Math.round(lampDistGap()*100);
+      toast('⚠️ 전등 거리가 '+gapCm+'cm 차이나요. 전등을 클릭해 회수하고 비커에서 같은 거리로 다시 두세요 (6cm 이내, 서로 겹치지 않게)');
+    }
+  } else toast('💡 전등 배치 ('+G2.lampsPlaced+'/'+need+') — 비커로부터 같은 거리에! 점선 원에 맞춰 두면 정확해요 (잘못 두면 클릭해 회수)');
+  updateLampGuide();
   checkStage2();
 }
-// 배치된 전등들이 비커로부터 거의 같은 거리인지 (핵심 통제변인)
+// 배치된 전등들이 비커로부터 거의 같은 거리인지 (핵심 통제변인) — 엄격하게 판정
 function lampsEqualDist(){
   const placed=r2lamps.filter(lg=>lg.userData.placed);
   if(placed.length<G2.round) return false;
   if(placed.length<=1) return true;
   const ds=placed.map(lg=>lg.userData.dist||0);
   const max=Math.max(...ds), min=Math.min(...ds);
-  return (max-min) <= 0.15;   // 15cm 이내만 "같은 거리"로 인정 (엄격)
+  // 1) 비커로부터 거리 편차 6cm 이내 (이전 15cm → 엄격)
+  if((max-min) > 0.06) return false;
+  // 2) 전등끼리 너무 붙어 있으면(겹쳐 둬서 거리만 맞춘 꼼수) 실패 — 최소 25cm 떨어뜨려 배치
+  for(let i=0;i<placed.length;i++){
+    for(let j=i+1;j<placed.length;j++){
+      const a=placed[i].position, b=placed[j].position;
+      if(Math.hypot(a.x-b.x, a.z-b.z) < 0.25) return false;
+    }
+  }
+  return true;
+}
+// 등거리 편차(cm) — 안내용
+function lampDistGap(){
+  const placed=r2lamps.filter(lg=>lg.userData.placed);
+  if(placed.length<=1) return 0;
+  const ds=placed.map(lg=>lg.userData.dist||0);
+  return (Math.max(...ds)-Math.min(...ds));
 }
 
 /* ---- 4단계: 실험 진행(전등 1·2·3개 부상 시간 측정) ---- */
@@ -2002,6 +2047,7 @@ function r2RunExperiment(){
   if(G2.lampsPlaced<G2.round){ toast('전등 '+G2.round+'개를 먼저 배치하세요'); return; }
   if(!lampsEqualDist()){ toast('⚠️ 전등들이 비커로부터 같은 거리가 아니에요! 거리를 맞춰야 공정한 실험이 됩니다'); return; }
   r2exp.running=true; r2exp.t=0;
+  if(typeof lampGuideRing!=='undefined') lampGuideRing.visible=false;
   r2exp.dur=G2.times[G2.round-1];        // 이번 회차 소요 시간
   setLampCount(G2.round);                 // 배치한 전등 점등
   $('stopwatch').style.display='block';
