@@ -165,8 +165,16 @@
 <div id="dummyHud" style="display:none;position:fixed;left:12px;top:64px;z-index:120;
   background:rgba(15,18,28,.82);border:1px solid #5a7bb0;border-radius:10px;padding:8px 12px;
   color:#dfe;font-size:13px;font-weight:bold;line-height:1.7;">
-  📜 쪽지 <span id="noteCount">0</span>/4 &nbsp;<span style="color:#9ab;font-weight:normal;">(Q: 쪽지 · I: 인벤토리)</span><br>
+  📜 쪽지 <span id="noteCount">0</span>/4 &nbsp;<span style="color:#9ab;font-weight:normal;">(Q: 쪽지 · I: 인벤토리 · M: 지도)</span><br>
+  🔍 가구를 <b style="color:#e4b53a;">클릭</b>하거나 <b style="color:#e4b53a;">F</b>키로 뒤지기<br>
   🔒 정문 자물쇠 4자리를 풀어 탈출
+</div>
+<!-- 저택 상호작용 버튼(클릭 전용 — 키보드 없는 기기 대응) -->
+<div id="houseBtns" style="display:none;position:fixed;right:12px;top:64px;z-index:121;
+  flex-direction:column;gap:8px;">
+  <button id="btnMap"  style="padding:10px 14px;border:1px solid #5a7bb0;border-radius:10px;background:rgba(20,26,40,.9);color:#dfe;font-size:14px;font-weight:bold;cursor:pointer;">🗺️ 지도</button>
+  <button id="btnNote" style="padding:10px 14px;border:1px solid #5a7bb0;border-radius:10px;background:rgba(20,26,40,.9);color:#dfe;font-size:14px;font-weight:bold;cursor:pointer;">📜 쪽지</button>
+  <button id="btnInv"  style="padding:10px 14px;border:1px solid #5a7bb0;border-radius:10px;background:rgba(20,26,40,.9);color:#dfe;font-size:14px;font-weight:bold;cursor:pointer;">🎒 인벤토리</button>
 </div>
 <div id="lanternColorHud" style="display:none;position:fixed;left:12px;top:118px;z-index:120;
   background:rgba(15,18,28,.82);border:1px solid #5a7bb0;border-radius:10px;padding:7px 12px;
@@ -379,6 +387,10 @@
 
 <!-- mobile controls -->
 <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+<button id="jumpBtn" style="display:none;position:fixed;right:22px;bottom:30px;z-index:22;
+  width:88px;height:88px;border-radius:50%;border:2px solid #e4b53a;
+  background:rgba(40,34,20,.85);color:#f0d8a0;font-size:15px;font-weight:bold;cursor:pointer;
+  touch-action:none;user-select:none;">⤴<br>점프</button>
 
 <div class="toast" id="toast"></div>
 
@@ -690,7 +702,7 @@ const beamMat=new THREE.MeshBasicMaterial({color:0xfff0b0,transparent:true,opaci
 const beam=new THREE.Mesh(new THREE.PlaneGeometry(6,2.4),beamMat);
 beam.position.set(WINX+3,1.6,WINZ); beam.rotation.y=Math.PI/2; beam.renderOrder=1; scene.add(beam);
 // 창문 쪽 햇빛 조명
-const sunBeamLight=new THREE.SpotLight(0xfff0c0,0,14,Math.PI/4,0.5,1);
+const sunBeamLight=new THREE.SpotLight(0xfff0c0,0,16,Math.PI/3,0.9,1);
 sunBeamLight.position.set(WINX+0.3,2.4,WINZ);
 sunBeamLight.target.position.set(0, 0.95, -3);  // 실험대(BENCH) 위치 직접 지정
 scene.add(sunBeamLight); scene.add(sunBeamLight.target);
@@ -1183,8 +1195,7 @@ const GRAV=-18, JUMP=7.2, SPEED=4.2;
 const keys={};
 let mv={x:0,y:0};   // 조이스틱 이동 벡터 (resetInput보다 먼저 선언)
 addEventListener('keydown',e=>{ keys[e.code]=true;
-  if(e.code==='KeyF'){ if(room3.ready){ const sp=nearestSpot(); const sg=nearestSign(); const dr=nearestExitDoor();
-    if(sp) searchSpot(sp); else if(dr) openLock(); else if(sg) openSign(sg); else toggleNearDoor(); } else lookBlow(); }
+  if(e.code==='KeyF'){ if(room3.ready){ doSearchAction(); } else lookBlow(); }
   if(e.code==='KeyQ'){ if(room3.ready) toggleNoteViewer(); }
   if(e.code==='KeyI'){ if(room3.ready) toggleInventory(); }
   if(e.code==='KeyR'){ if(room3.ready) cycleLanternColor(); else lookReset(); }
@@ -1196,6 +1207,11 @@ addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.shiftKey && e.code==='Digit3') warpTo(3);
 });
 addEventListener('keyup',e=>keys[e.code]=false);
+// 가구 뒤지기/정문/표지/문 — F키와 버튼 공용
+function doSearchAction(){
+  const sp=nearestSpot(); const sg=nearestSign(); const dr=nearestExitDoor();
+  if(sp) searchSpot(sp); else if(dr) openLock(); else if(sg) openSign(sg); else toggleNearDoor();
+}
 
 // ===== 디버그 워프 (개발용): 특정 방으로 즉시 이동 =====
 function warpTo(room){
@@ -1427,6 +1443,9 @@ $('blindBtn').addEventListener('click',e=>{ e.stopPropagation();
   if(G.stage===3 && !blind.done){ raiseBlind(); $('blindBtn').style.display='none'; }
 });
 $('blowBtn').addEventListener('click',e=>{ e.stopPropagation(); lookBlow(); });
+$('btnMap').addEventListener('click',e=>{ e.stopPropagation(); toggleBigMap(); });
+$('btnNote').addEventListener('click',e=>{ e.stopPropagation(); toggleNoteViewer(); });
+$('btnInv').addEventListener('click',e=>{ e.stopPropagation(); toggleInventory(); });
 $('r2runBtn').addEventListener('click',e=>{ e.stopPropagation(); r2RunExperiment(); });
 $('r2phoneBtn').addEventListener('click',e=>{ e.stopPropagation(); openPhone(); });
 // 2번방: 화면을 짧게 클릭하면 주사기 끝/핸드폰 상호작용 (시야 드래그와 구분)
@@ -1437,26 +1456,8 @@ cv.addEventListener('mouseup',e=>{
   const moved=Math.hypot(e.clientX-r2ClickDown.x, e.clientY-r2ClickDown.y);
   r2ClickDown=null;
   if(moved>6) return;                 // 드래그(시야 회전)면 무시
-  // 저택: 부품 클릭 → 퀴즈, 문 클릭 → 토글
-  if(room3.ready){
-    const nx=(e.clientX/innerWidth)*2-1, ny=-(e.clientY/innerHeight)*2+1;
-    ray.setFromCamera(new THREE.Vector2(nx,ny),camera);
-    // 수색 지점
-    const phits=ray.intersectObjects(spotMarkers.filter(g=>!g.userData.spot.searched),true);
-    if(phits.length && phits[0].distance<3.5){
-      let o=phits[0].object; while(o && !(o.userData&&o.userData.spot)) o=o.parent;
-      if(o){ searchSpot(o); return; }
-    }
-    // 정문(자물쇠)
-    if(nearestExitDoor()){ openLock(); return; }
-    // 안내 액자
-    const shits=ray.intersectObjects(signObjs,true);
-    if(shits.length && shits[0].distance<3.5){
-      let o=shits[0].object; while(o && !(o.userData&&o.userData.info)) o=o.parent;
-      if(o){ openSign(o); return; }
-    }
-    if(pickDoor(e.clientX,e.clientY)) return;
-  }
+  // 저택: 가구 직접 클릭으로 뒤지기 / 정문·표지·문 (모바일 탭과 동일 로직)
+  if(room3.ready){ tapInteract(e.clientX, e.clientY); return; }
   // 1단계: 설치한 사물(빨대/검정말/포일)을 클릭하면 마지막 설치부터 회수
   if(!room3.ready && !G2.active && !dragging){
     const k=screenTube(e.clientX,e.clientY);
@@ -1726,7 +1727,10 @@ function r2TipClick(){
    Mobile joystick + look
    ========================================================= */
 const stickEl=$('stick'), nub=$('nub');
-if(isTouch){ $('stick').style.display='block'; }
+if(isTouch){ $('stick').style.display='block'; $('jumpBtn').style.display='block'; }
+// 점프 버튼: 누르면 한 번 점프
+function doJump(){ if(player.onGround){ player.vel.y=JUMP; player.onGround=false; } }
+$('jumpBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); e.stopPropagation(); doJump(); });
 let stickPointerId=null;   // 이동 스틱을 잡은 포인터(시야 회전에서 제외)
 (function(){ let cx=0,cy=0;
   stickEl.addEventListener('pointerdown',e=>{ stickPointerId=e.pointerId; const r=stickEl.getBoundingClientRect();
@@ -1778,19 +1782,70 @@ let stickPointerId=null;   // 이동 스틱을 잡은 포인터(시야 회전에
     player.pitch=Math.max(-1.3,Math.min(1.3,player.pitch)); lx=e.clientX; ly=e.clientY;
   });
   function end(e){ if(e.pointerId!==id) return;
+    const moved=Math.hypot(e.clientX-sx, e.clientY-sy);
     if(mode==='plunger' && plungerDrag){
       if(plungerDrag.pull>0.7) r2RemoveAir(); else updateSyringe();
       plungerDrag=null;
     } else if(mode==='gun' && gun.has){
-      // 거의 안 움직였으면 탭 → 발사
-      const moved=Math.hypot(e.clientX-sx, e.clientY-sy);
       if(moved<10) fireGun();
+    } else if(moved<10){
+      // 탭(거의 안 움직임) → 클릭 상호작용 처리(가구 뒤지기/정문/문/시험관 회수)
+      tapInteract(e.clientX, e.clientY);
     }
     id=null; mode=null;
   }
   addEventListener('pointerup',end);
   addEventListener('pointercancel',end);
 })();
+// 클릭/탭 상호작용 (데스크탑 클릭 + 모바일 탭 공용)
+function tapInteract(cxp, cyp){
+  if(!G.on) return;
+  if(room3.ready){
+    const nx=(cxp/innerWidth)*2-1, ny=-(cyp/innerHeight)*2+1;
+    ray.setFromCamera(new THREE.Vector2(nx,ny),camera);
+    // 1) 수색 마커(쪽지 빛나는 구체)를 직접 조준했으면 그 가구를 뒤짐
+    const phits=ray.intersectObjects(spotMarkers.filter(g=>!g.userData.spot.searched),true);
+    if(phits.length && phits[0].distance<5){
+      let o=phits[0].object; while(o && !(o.userData&&o.userData.spot)) o=o.parent;
+      if(o){ searchSpot(o); return; }
+    }
+    // 2) 가구 자체(메시)를 클릭했는지: 클릭 레이가 가구(수색지점) 근처를 지나면 그 가구를 뒤짐
+    const sgClicked=searchByRay();
+    if(sgClicked){ searchSpot(sgClicked); return; }
+    // 3) 정문/표지/문
+    if(nearestExitDoor()){ openLock(); return; }
+    const shits=ray.intersectObjects(signObjs,true);
+    if(shits.length && shits[0].distance<3.5){
+      let o=shits[0].object; while(o && !(o.userData&&o.userData.info)) o=o.parent;
+      if(o){ openSign(o); return; }
+    }
+    if(pickDoor(cxp,cyp)) return;
+    return;
+  }
+  // 1단계: 설치한 사물 클릭 회수
+  if(!G2.active && !dragging){
+    const k=screenTube(cxp,cyp); if(k){ retrieveTube(k); return; }
+  }
+}
+// 클릭 레이(ray)가 어떤 수색지점(가구) 기둥을 지나는지 — 지나면 그 마커 그룹 반환
+function searchByRay(){
+  const o=ray.ray.origin, dir=ray.ray.direction;
+  let best=null, bestT=1e9;
+  for(const g of spotMarkers){
+    if(g.userData.spot.searched) continue;
+    // 가구를 수직 기둥(반경 0.9)으로 근사해 레이와의 수평 최근접 거리 계산
+    const gx=g.position.x, gz=g.position.z;
+    // 레이 위 매개변수 t에서의 점이 (gx,gz)에 수평으로 가장 가까운 지점
+    const dx=dir.x, dz=dir.z; const L=dx*dx+dz*dz; if(L<1e-6) continue;
+    let t=((gx-o.x)*dx+(gz-o.z)*dz)/L; if(t<0) continue;
+    const px=o.x+dx*t, pz=o.z+dz*t;
+    const dist=Math.hypot(px-gx, pz-gz);
+    // 플레이어와 가구 거리(너무 멀면 제외)
+    const pd=Math.hypot(player.pos.x-gx, player.pos.z-gz);
+    if(dist<1.0 && pd<3.5 && t<bestT){ bestT=t; best=g; }
+  }
+  return best;
+}
 
 /* =========================================================
    블라인드 (4단계) — 블라인드를 올리면 햇빛이 들어와 광합성 진행
@@ -2480,8 +2535,11 @@ let noteOptic=null;   // (구버전 호환)
 function openNoteViewer(){
   if(progress.notes.length===0){ toast('아직 쪽지가 없다. 가구를 뒤져 쪽지를 찾자'); return; }
   noteViewIdx=0; droppedOptic=null; renderNoteViewer(); $('noteViewer').style.display='flex'; exitPointerUnlock();
+  // 쪽지 뷰어(z400) 위로 인벤토리 버튼을 띄워 클릭 가능하게(모바일 클릭 진행)
+  const hb=$('houseBtns'); if(hb){ hb.style.zIndex='460'; hb.dataset.raised='1'; }
 }
-function closeNoteViewer(){ $('noteViewer').style.display='none'; closeInventory(); }
+function closeNoteViewer(){ $('noteViewer').style.display='none'; closeInventory();
+  const hb=$('houseBtns'); if(hb){ hb.style.zIndex='121'; hb.dataset.raised=''; } }
 function toggleNoteViewer(){ if($('noteViewer').style.display==='flex') closeNoteViewer(); else openNoteViewer(); }
 function renderNoteViewer(){
   const ids=progress.notes.slice().sort((a,b)=>a-b);
@@ -3294,6 +3352,7 @@ function enterMansion(){
   ['tray','tray2','blowBtn','r2phoneBtn','r2counter','phonePanel','graphPanel','keypadPanel','windowPanel']
     .forEach(id=>{ if($(id)) $(id).style.display='none'; });
   $('dummyHud').style.display='block';
+  $('houseBtns').style.display='flex';
   try{ updateNoteHud(); }catch(e){}
   openBigMap();   // 진입 시 전체 지도 한 번 보여줌(이후엔 M키로만)
   toast('🏚️ 낡은 저택에 떨어졌다… 어둠 속, 손전등으로 길을 찾아라. (M: 지도, Q: 쪽지, I: 인벤토리)');
@@ -3367,7 +3426,7 @@ function loop(now){
       blindGroup.position.y = (1-blind.amount)*1.6;
       const lit = 1-blind.amount;
       beamMat.opacity = lit*0.12;
-      sunBeamLight.intensity = lit*2.4;
+      sunBeamLight.intensity = lit*0.7;   // 표면 색 아티팩트 방지 위해 약하게(빔 평면 위주로 연출)
       // 태양이 점점 드러남
       sunDisk.visible=sunHalo.visible=sunRays.visible=true;
       sunMat.opacity = lit;
@@ -3433,7 +3492,7 @@ function loop(now){
     else groundY = player.height;
     if(player.pos.y<=groundY){ player.pos.y=groundY; player.vel.y=0; player.onGround=true; }
     if(room3.ready){ updateDoors(dt); updateStatue(dt); updateParts(dt); updateLantern(); updateStatueBreak(dt);
-      if($('dummyHud').style.display==='none'){ $('dummyHud').style.display='block'; }
+      if($('dummyHud').style.display==='none'){ $('dummyHud').style.display='block'; $('houseBtns').style.display='flex'; }
       if($('mapModal').style.display==='flex') drawMap($('bigMap'),true);
     }
 
@@ -3549,7 +3608,7 @@ function start(){
   if(typeof statue!=='undefined'){ statue.active=false; statue.caught=false; if(statue.group) statue.group.visible=false; }
   if(typeof progress!=='undefined'){ progress.notes=[]; progress.unlocked=false;
     if(typeof searchSpots!=='undefined'){ try{ reshuffleNotes(); }catch(e){ searchSpots.forEach(s=>s.searched=false); } }
-    try{ updateNoteHud(); }catch(e){} $('dummyHud').style.display='none';
+    try{ updateNoteHud(); }catch(e){} $('dummyHud').style.display='none'; if($('houseBtns')) $('houseBtns').style.display='none';
     ['quizPanel','findPanel','noteViewer','lockPanel','invPanel','phoneLockPanel','gunGetPanel','crosshair','gunHud','muzzle','gunWarn'].forEach(id=>{ if($(id)) $(id).style.display='none'; }); }
   if(typeof gun!=='undefined'){ gun.has=false; gun.hits=0; }
   if(typeof statueBreak!=='undefined'){ statueBreak.active=false; statueBreak.t=0; }
